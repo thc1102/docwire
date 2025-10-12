@@ -121,64 +121,48 @@ echo "========================================"
 
 case "$(uname -s)" in
   Linux)
-    # 检查并安装 auditwheel
-    if ! command -v auditwheel >/dev/null 2>&1; then
-      echo "安装 auditwheel..."
-      if ! python3 -m pip install --user auditwheel 2>/dev/null; then
-        echo "⚠ auditwheel 安装失败，跳过 wheel 修复" >&2
-        echo "  可以手动安装: pip install auditwheel" >&2
-      fi
-    fi
+    # 设置 LD_LIBRARY_PATH 指向 vcpkg 库目录
+    VCPKG_LIB_DIR="${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/lib"
+    export LD_LIBRARY_PATH="${VCPKG_LIB_DIR}:${LD_LIBRARY_PATH:-}"
     
-    if command -v auditwheel >/dev/null 2>&1; then
-      # 设置 LD_LIBRARY_PATH 指向 vcpkg 库目录
-      VCPKG_LIB_DIR="${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/lib"
-      export LD_LIBRARY_PATH="${VCPKG_LIB_DIR}:${LD_LIBRARY_PATH:-}"
+    echo "使用 vcpkg 库目录: ${VCPKG_LIB_DIR}"
+    
+    for whl in "${DIST_DIR}"/*.whl; do
+      [[ -f "$whl" ]] || continue
       
-      echo "使用 vcpkg 库目录: ${VCPKG_LIB_DIR}"
+      # 跳过已修复的 wheel（带 manylinux 标签）
+      if [[ "$(basename "$whl")" == *"manylinux"* ]]; then
+        echo "跳过已修复的 wheel: $(basename "$whl")"
+        continue
+      fi
       
-      for whl in "${DIST_DIR}"/*.whl; do
-        [[ -f "$whl" ]] || continue
-        
-        # 跳过已修复的 wheel（带 manylinux 标签）
-        if [[ "$(basename "$whl")" == *"manylinux"* ]]; then
-          echo "跳过已修复的 wheel: $(basename "$whl")"
-          continue
-        fi
-        
-        echo "修复 wheel: $(basename "$whl")"
-        
-        # 使用 auditwheel repair 自动检测和打包依赖
-        if auditwheel repair -w "${DIST_DIR}" "${whl}"; then
-          echo "✓ 成功生成 manylinux wheel"
-          # 删除原始 wheel
-          rm -f "${whl}"
-        else
-          echo "⚠ auditwheel 修复失败，保留原始 wheel" >&2
-        fi
-      done
-    else
-      echo "⚠ 未找到 auditwheel，跳过 wheel 修复"
-      echo "  原始 wheel 可在当前系统使用，但跨系统可移植性受限"
-    fi
+      echo "修复 wheel: $(basename "$whl")"
+      
+      # 使用 uvx 运行 auditwheel（自动管理依赖）
+      if uvx auditwheel repair -w "${DIST_DIR}" "${whl}"; then
+        echo "✓ 成功生成 manylinux wheel"
+        # 删除原始 wheel
+        rm -f "${whl}"
+      else
+        echo "⚠ auditwheel 修复失败，保留原始 wheel" >&2
+      fi
+    done
     ;;
     
   Darwin)
     # macOS 使用 delocate
-    if command -v delocate-wheel >/dev/null 2>&1; then
-      echo "使用 delocate 修复 wheel..."
-      for whl in "${DIST_DIR}"/*.whl; do
-        [[ -f "$whl" ]] || continue
-        echo "修复 wheel: $(basename "$whl")"
-        if delocate-wheel -w "${DIST_DIR}" "${whl}"; then
-          echo "✓ wheel 修复成功"
-          rm -f "${whl}"
-        fi
-      done
-    else
-      echo "⚠ 未找到 delocate-wheel，跳过 wheel 修复"
-      echo "  可以安装: pip install delocate"
-    fi
+    echo "使用 delocate 修复 wheel..."
+    for whl in "${DIST_DIR}"/*.whl; do
+      [[ -f "$whl" ]] || continue
+      echo "修复 wheel: $(basename "$whl")"
+      # 使用 uvx 运行 delocate-wheel（自动管理依赖）
+      if uvx delocate-wheel -w "${DIST_DIR}" "${whl}"; then
+        echo "✓ wheel 修复成功"
+        rm -f "${whl}"
+      else
+        echo "⚠ delocate-wheel 修复失败，保留原始 wheel" >&2
+      fi
+    done
     ;;
     
   *)
