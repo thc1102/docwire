@@ -1,0 +1,42 @@
+# 构建系统配置
+[build-system]
+requires = [
+  "scikit-build-core>=0.9",
+  "pybind11>=2.10",
+  "cmake>=3.20",
+  "ninja; platform_system != 'Windows'",
+]
+build-backend = "scikit_build_core.build"
+
+# 项目元信息
+[project]
+name = "docwire-py"
+version = "0.0.1"
+description = "DocWire Python 绑定（非 AI 流水线）"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "DocWire Team" }]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C++",
+  "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Homepage = "https://github.com/docwire/docwire"
+
+# scikit-build-core 构建配置
+[tool.scikit-build]
+cmake.minimum-version = "3.20"
+# CMake 项目位于 py/ 目录
+cmake.source-dir = "py"
+# 启用详细输出以便调试
+cmake.verbose = true
+
+# 注意：如果 docwire 安装到自定义路径，通过以下方式指定：
+#   export CMAKE_PREFIX_PATH=/path/to/docwire/install
+# 或使用 pip 时：
+#   pip wheel . --config-settings=cmake.define.CMAKE_PREFIX_PATH=/path/to/docwire/install
