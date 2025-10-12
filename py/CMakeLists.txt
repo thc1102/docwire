@@ -62,7 +62,7 @@ __version__ = '0.0.1'
 
 # 打包动态库到 wheel
 # 选项：BUNDLE_ALL_VCPKG=ON 打包所有 vcpkg 库（自包含但体积大）
-#       BUNDLE_ALL_VCPKG=OFF 仅打包 DocWire 库（体积小但需要系统库）
+#       BUNDLE_ALL_VCPKG=OFF 仅打包实际使用的 DocWire 核心库（体积小，依赖由 auditwheel 自动检测）
 option(BUNDLE_ALL_VCPKG "打包所有 vcpkg 动态库以实现完全自包含" ON)
 
 if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
@@ -75,10 +75,35 @@ if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
         message(STATUS "打包所有 vcpkg 库（${SO_COUNT} 个文件）以实现完全自包含")
         install(FILES ${ALL_SO_FILES} DESTINATION docwire_py/${CMAKE_INSTALL_LIBDIR})
     else()
-        # 仅打包 DocWire 库
-        file(GLOB DOCWIRE_SO_FILES "${VCPKG_LIB_DIR}/libdocwire*.so")
+        # 仅打包 docwire_py.so 直接依赖的 DocWire 库
+        # 注意：这些库由 target_link_libraries 决定，必须手动打包到 docwire_py/lib/
+        # auditwheel 只负责打包第三方依赖（boost, libxml2 等）到 docwire_py.libs/
+        
+        # 方案：排除不需要的库（AI、OCR、HTTP 相关）
+        file(GLOB ALL_DOCWIRE_LIBS "${VCPKG_LIB_DIR}/libdocwire*.so")
+        
+        # 排除列表：AI 和其他不需要的功能
+        set(EXCLUDE_LIBS
+            "libdocwire_ai.so"
+            "libdocwire_local_ai.so"
+            "libdocwire_openai.so"
+            "libdocwire_ocr.so"
+            "libdocwire_http.so"
+        )
+        
+        # 过滤掉排除的库
+        set(DOCWIRE_SO_FILES)
+        foreach(lib_path ${ALL_DOCWIRE_LIBS})
+            get_filename_component(lib_name ${lib_path} NAME)
+            list(FIND EXCLUDE_LIBS ${lib_name} is_excluded)
+            if(is_excluded EQUAL -1)
+                list(APPEND DOCWIRE_SO_FILES ${lib_path})
+            endif()
+        endforeach()
+        
         list(LENGTH DOCWIRE_SO_FILES SO_COUNT)
-        message(STATUS "仅打包 DocWire 库（${SO_COUNT} 个文件），依赖系统库")
+        message(STATUS "打包 DocWire 核心库（${SO_COUNT} 个文件），排除 AI/OCR/HTTP 功能")
+        message(STATUS "第三方依赖由 auditwheel 自动检测并打包到 .libs/ 目录")
         install(FILES ${DOCWIRE_SO_FILES} DESTINATION docwire_py/${CMAKE_INSTALL_LIBDIR})
     endif()
 else()
