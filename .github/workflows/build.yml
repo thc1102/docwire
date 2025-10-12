@@ -6,6 +6,10 @@ on:
         description: 'Create vcpkg export archive'
         type: boolean
         default: false
+      release_tag:
+        description: 'Optional: Enter a tag (e.g., v1.0.0) to create a release and upload artifacts.'
+        required: false
+        type: string
 run-name: Manual build
 permissions:
   packages: write
@@ -73,11 +77,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
       
-      # 如果是 Release tag，自动上传 wheel 到 Release
       - name: "Upload wheels to GitHub Release"
         uses: softprops/action-gh-release@v2
-        if: success() && runner.os == 'Linux' && startsWith(github.ref, 'refs/tags/')
+        if: success() && runner.os == 'Linux' && (startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != '')
         with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           files: dist/*.whl
           fail_on_unmatched_files: false
       
